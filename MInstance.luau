@@ -460,14 +460,14 @@ ReverseInstanceMap = function(Map, ParentOfInstance, DeserializeMeshPartsProperl
 						if CachedInstance then
 							SafelySetProperty(PropertyName, CachedInstance)
 						else
-							local function callback(GotInstance)
+							local function Callback(GotInstance)
 								SafelySetProperty(PropertyName, GotInstance)
 							end
 							
 							if CurrentlyPointingTo.Callbacks then
-								table.insert(CurrentlyPointingTo.Callbacks,callback)
+								table_insert(CurrentlyPointingTo.Callbacks, Callback)
 							else
-								CurrentlyPointingTo.Callbacks = {callback}
+								CurrentlyPointingTo.Callbacks = {Callback}
 							end
 						end
 					else
@@ -504,6 +504,7 @@ end
 Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSettings: {
 	IncludeDescendants: boolean,
 	CompressSerializedData: boolean,
+	CompressionLevel: number,
 	EncodeInBase94: boolean,
 	AnnoyingConsolePrints: boolean,
 	UseLegacySlowCompressor: boolean,
@@ -511,11 +512,12 @@ Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSe
 	DisallowedProperties: {[string]: {[string]: any} } | nil
 	})
 	
-	local IncludeDescendants, CompressSerializedData, EncodeInBase94, AnnoyingConsolePrints, UseLegacySlowCompressor, IncludeAttributes, DisallowedProperties, StartBenchmarkTime
+	local StartBenchmarkTime
 
 	local DefaultSerializationSettings = {
 		IncludeDescendants = true,
 		CompressSerializedData = true,
+		CompressionLevel = 8, -- seems to be the sweet spot to balance performance and compression ratio
 		EncodeInBase94 = false,
 		AnnoyingConsolePrints = false,
 		UseLegacySlowCompressor = false,
@@ -529,23 +531,12 @@ Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSe
 		-- }
 	}
 
-	if not SerializationSettings then
-		SerializationSettings = DefaultSerializationSettings
-	end
-	
-	for Setting in pairs(DefaultSerializationSettings) do
-		if SerializationSettings[Setting] == NULL then
-			return ThrowToConsole(`Please provide add all settings to SerializationSettings. Missing "{Setting}".`, 2)
+	local Settings = SerializationSettings or {}
+	for Setting, DefaultValue in pairs(DefaultSerializationSettings) do
+		if Settings[Setting] == NULL then
+			Settings[Setting] = DefaultValue
 		end
 	end
-	
-	IncludeDescendants = SerializationSettings.IncludeDescendants
-	CompressSerializedData = SerializationSettings.CompressSerializedData
-	EncodeInBase94 = SerializationSettings.EncodeInBase94
-	AnnoyingConsolePrints = SerializationSettings.AnnoyingConsolePrints
-	UseLegacySlowCompressor = SerializationSettings.UseLegacySlowCompressor
-	IncludeAttributes = SerializationSettings.IncludeAttributes
-	DisallowedProperties = SerializationSettings.DisallowedProperties
 
 	if not ReflectionServiceWrapper.IsApiInitialized() then
 		return ThrowToConsole(`There was a problem with initalizing the API and Minstance can not serialize an Instance. Please get in contact with @WalletOverflow in Roblox and let them know about this, and please show recent console errors coming from this module.`, 2)
@@ -559,53 +550,53 @@ Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSe
 		return ThrowToConsole(`Instance "{TargetInstance:GetFullName()}" ({TargetInstance.ClassName}) is not creatable and can not be serialized.`, 2)
 	end
 
-	if AnnoyingConsolePrints then
+	if Settings.AnnoyingConsolePrints then
 		ThrowToConsole(`You are seeing this because AnnoyingConsolePrints setting was set to true in SerializationSettings.`)
 		ThrowToConsole(`Target Instance: "{TargetInstance:GetFullName()}" ({TargetInstance.ClassName}) ({tostring(#TargetInstance:GetDescendants())} descendants)`)
 		ThrowToConsole(`Mapping Instance...`)
 
 		StartBenchmarkTime = os_clock()
 	end
-	
+
 	if PropertyCompressionCount > 0 then
 		PropertyCompressionCount = 0
 	end
 
-	local MainMap = CreateInstanceMap(TargetInstance, IncludeDescendants, AnnoyingConsolePrints, TargetInstance, IncludeAttributes, DisallowedProperties)
-	
+	local MainMap = CreateInstanceMap(TargetInstance, Settings.IncludeDescendants, Settings.AnnoyingConsolePrints, TargetInstance, Settings.IncludeAttributes, Settings.DisallowedProperties)
+
 	if PropertyCompressionCount > 0 then
 		PropertyCompressionCount = 0
 	end
-	
-	if AnnoyingConsolePrints then
-		if IncludeDescendants then
+
+	if Settings.AnnoyingConsolePrints then
+		if Settings.IncludeDescendants then
 			ThrowToConsole(string_format(`Finished serializing/mapping "{TargetInstance:GetFullName()}" (and {tostring(#TargetInstance:GetDescendants())} descendants) in %.4fs!`, os_clock() - StartBenchmarkTime))
 		else
 			ThrowToConsole(string_format(`Finished serializing/mapping "{TargetInstance:GetFullName()}" in %.4fs!`, os_clock() - StartBenchmarkTime))
 		end
 	end
-	
+
 	local BinaryEncoded = BufferEncoder.write(MainMap, nil, nil, true)
 
-	if not CompressSerializedData then
-		if EncodeInBase94 then
+	if not Settings.CompressSerializedData then
+		if Settings.EncodeInBase94 then
 			return buffer_tostring(Base94.encode(BinaryEncoded))
 		else
 			return buffer_tostring(BinaryEncoded)
 		end
 	else
-		if AnnoyingConsolePrints then
+		if Settings.AnnoyingConsolePrints then
 			ThrowToConsole(`Attempting to compress serialized data...`)
 			StartBenchmarkTime = os_clock()
 		end
-		
+
 		local BinaryEncodedString = buffer_tostring(BinaryEncoded)
 
-		if UseLegacySlowCompressor then
-			if EncodeInBase94 then
+		if Settings.UseLegacySlowCompressor then
+			if Settings.EncodeInBase94 then
 				local FinalCompressedData = OldCompress.Compress(BinaryEncodedString)
 
-				if AnnoyingConsolePrints then
+				if Settings.AnnoyingConsolePrints then
 					ThrowToConsole(string_format(`Finished compressing & encoding serialized data in %.4fs!`, os_clock() - StartBenchmarkTime))
 					ThrowToConsole(`Serialized data character count before compression: {#BinaryEncodedString}`)
 					ThrowToConsole(`Serialized data character count after compression: {#FinalCompressedData}`)
@@ -613,9 +604,9 @@ Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSe
 
 				return FinalCompressedData
 			else
-				local FinalCompressedData = OldCompress.CompressNoEncoding(BinaryEncodedString)
+				local FinalCompressedData = OldCompress.CompressNoEncoding(BinaryEncodedString, Settings.CompressionLevel)
 
-				if AnnoyingConsolePrints then
+				if Settings.AnnoyingConsolePrints then
 					ThrowToConsole(string_format(`Finished compressing serialized data in %.4fs!`, os_clock() - StartBenchmarkTime))
 					ThrowToConsole(`Serialized data character count before compression: {#BinaryEncodedString}`)
 					ThrowToConsole(`Serialized data character count after compression: {#FinalCompressedData}`)
@@ -624,39 +615,25 @@ Minstance.SerializeInstance = function(TargetInstance: Instance, SerializationSe
 				return FinalCompressedData
 			end
 		else
-			local Success, Compressed = pcall(function()
-				return NewCompress.Compress(BinaryEncodedString)
-			end)
-			
-			if not Success then
-				if Compressed:match("String passed is too short to compress.") then -- TODO: implemetn proper fix and not this bandaid solution just beacause i have to sleep soon
-					-- TODO: implemetn proper fix and not this bandaid solution just beacause i have to sleep soon
-					MainMap[string.rep("a", 20)] = true
-					BinaryEncoded = BufferEncoder.write(MainMap, nil, nil, true)
-					BinaryEncodedString = buffer_tostring(BinaryEncoded)
-					Compressed = NewCompress.Compress(BinaryEncodedString)
-				else
-					return error(Compressed)
-				end
-			end
-			
-			if EncodeInBase94 then
+			local Compressed = NewCompress.Compress(BinaryEncodedString, Settings.CompressionLevel)
+
+			if Settings.EncodeInBase94 then
 				local Base94Encoded = buffer_tostring(Base94.encode(buffer_fromstring(Compressed)))
-				
-				if AnnoyingConsolePrints then
+
+				if Settings.AnnoyingConsolePrints then
 					ThrowToConsole(string_format(`Finished compressing & encoding serialized data in %.4fs!`, os_clock() - StartBenchmarkTime))
 					ThrowToConsole(`Serialized data character count before compression: {#BinaryEncodedString}`)
 					ThrowToConsole(`Serialized data character count after compression: {#Base94Encoded}`)
 				end
-				
+
 				return Base94Encoded
 			else
-				if AnnoyingConsolePrints then
+				if Settings.AnnoyingConsolePrints then
 					ThrowToConsole(string_format(`Finished compressing serialized data in %.4fs!`, os_clock() - StartBenchmarkTime))
 					ThrowToConsole(`Serialized data character count before compression: {#BinaryEncodedString}`)
 					ThrowToConsole(`Serialized data character count after compression: {#Compressed}`)
 				end
-				
+
 				return Compressed
 			end
 		end
@@ -671,9 +648,9 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 	ProperlyDeserializeMeshParts: boolean,
 	ParentInstanceWhileDeserializing: Instance?
 	})
-	
-	local IsDataCompressed, IsBase94Encoded, AnnoyingConsolePrints, IsCompressedWithLegacyCompressor, ProperlyDeserializeMeshParts, ParentInstanceWhileDeserializing, StartBenchmarkTime, MainMap
-	
+
+	local StartBenchmarkTime, MainMap
+
 	local DefaultDeserializationSettings = {
 		IsDataCompressed = true,
 		IsBase94Encoded = false,
@@ -682,23 +659,13 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 		ProperlyDeserializeMeshParts = false, -- load mesh parts, if off then put mesh put but not load content
 		ParentInstanceWhileDeserializing = NULL
 	}
-	
-	if not DeserializationSettings then
-		DeserializationSettings = DefaultDeserializationSettings
-	end
-	
-	for Setting in pairs(DefaultDeserializationSettings) do
-		if DeserializationSettings[Setting] == NULL then
-			return ThrowToConsole(`Please provide add all settings to SerializationSettings. Missing "{Setting}".`, 2)
+
+	local Settings = DeserializationSettings or {}
+	for Setting, DefaultValue in pairs(DefaultDeserializationSettings) do
+		if Settings[Setting] == NULL then
+			Settings[Setting] = DefaultValue
 		end
 	end
-
-	IsDataCompressed = DeserializationSettings.IsDataCompressed
-	IsBase94Encoded = DeserializationSettings.IsBase94Encoded
-	AnnoyingConsolePrints = DeserializationSettings.AnnoyingConsolePrints
-	IsCompressedWithLegacyCompressor = DeserializationSettings.IsCompressedWithLegacyCompressor
-	ProperlyDeserializeMeshParts = DeserializationSettings.ProperlyDeserializeMeshParts
-	ParentInstanceWhileDeserializing = DeserializationSettings.ParentInstanceWhileDeserializing
 
 	if not ReflectionServiceWrapper.IsApiInitialized() then
 		return ThrowToConsole(`There was a problem with initalizing the API and Minstance can not deserialize an Instance. Please get in contact with @WalletOverflow in Roblox and let them know about this, and please show recent console errors coming from this module.`, 2)
@@ -708,16 +675,16 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 		return ThrowToConsole(`Invalid first argument passed into DeserializeInstance! Expected: string`, 2)
 	end
 
-	if AnnoyingConsolePrints then
+	if Settings.AnnoyingConsolePrints then
 		ThrowToConsole(`You are seeing this because AnnoyingConsolePrints setting was set to true in SerializationSettings.`)
 		ThrowToConsole(`Processing serialized data...`)
 
 		StartBenchmarkTime = os_clock()
 	end
 
-	if IsDataCompressed then
-		if IsCompressedWithLegacyCompressor then
-			if IsBase94Encoded then
+	if Settings.IsDataCompressed then
+		if Settings.IsCompressedWithLegacyCompressor then
+			if Settings.IsBase94Encoded then
 				local BinaryFormat = OldCompress.Decompress(SerializedData)
 
 				MainMap = BufferEncoder.read(buffer_fromstring(BinaryFormat), nil, nil, true)
@@ -727,7 +694,7 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 				MainMap = BufferEncoder.read(buffer_fromstring(BinaryFormat), nil, nil, true)
 			end
 		else
-			if IsBase94Encoded then
+			if Settings.IsBase94Encoded then
 				local Base94Decoded = buffer_tostring(Base94.decode(buffer_fromstring(SerializedData)))
 				local BinaryFormat = NewCompress.Decompress(Base94Decoded)
 
@@ -739,7 +706,7 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 			end
 		end
 	else
-		if IsBase94Encoded then
+		if Settings.IsBase94Encoded then
 			local BinaryBuffer = Base94.decode(buffer_fromstring(SerializedData))
 
 			MainMap = BufferEncoder.read(BinaryBuffer, nil, nil, true)
@@ -748,19 +715,19 @@ Minstance.DeserializeInstance = function(SerializedData: string, Deserialization
 		end
 	end
 
-	if AnnoyingConsolePrints then
+	if Settings.AnnoyingConsolePrints then
 		ThrowToConsole(string_format(`Finished processing serialized data in %.4fs!`, os_clock() - StartBenchmarkTime))
 		ThrowToConsole(`Attempting to demap/deserialize serialized data into Instance...`)
 
 		StartBenchmarkTime = os_clock()
 	end
-	
+
 	local MapReversalCache = {}
-	local MainInstance = ReverseInstanceMap(MainMap, ParentInstanceWhileDeserializing, ProperlyDeserializeMeshParts, MainMap, MapReversalCache)
-	
+	local MainInstance = ReverseInstanceMap(MainMap, Settings.ParentInstanceWhileDeserializing, Settings.ProperlyDeserializeMeshParts, MainMap, MapReversalCache)
+
 	table_clear(MapReversalCache)
 
-	if AnnoyingConsolePrints then
+	if Settings.AnnoyingConsolePrints then
 		ThrowToConsole(string_format(`Finished demapping/deserializing serialized data into an Instance in %.4fs!`, os_clock() - StartBenchmarkTime))
 	end
 
