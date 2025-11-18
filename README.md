@@ -68,6 +68,7 @@ You can simply pass the Instance you want to serialize/deserialize without passi
     --> Setting: ValueType = DefaultValue
     IncludeDescendants: boolean = true
     CompressSerializedData: boolean = true
+    CompressionLevel: number = 8
     EncodeInBase94: boolean = false
     AnnoyingConsolePrints: boolean = false
     UseLegacySlowCompressor: boolean = false
@@ -78,6 +79,7 @@ You can simply pass the Instance you want to serialize/deserialize without passi
 
   * **IncludeDescendants:** Determines if the descendants of the Instance you are serializing will also be serialized.
   * **CompressSerializedData:** Determines if the serialized data will be compressed with zstd.
+  * **CompressionLevel:** Determines the level of compression that will be used. The higher the level, the better the compression ratio is, but the slower it takes to compress. Lowest level is 1, while the highest is 22. Defaults to 8 if nothing is passed.
   * **EncodeInBase94:** Determines if the serialized data will be encoded in Base94, which is useful when you want to save serialized data into `DataStore`.
   * **AnnoyingConsolePrints:** If this is set to `true`, it will print in the console how long it took to serialize or deserialize data every single time you call `SerializeInstance` or `DeserializeInstance`.
   * **UseLegacySlowCompressor:** Determines if the serialized data should be compressed with the old and slow compressor ([https://devforum.roblox.com/t/string-compression-zlibdeflate/755687](https://devforum.roblox.com/t/string-compression-zlibdeflate/755687)) or use Roblox's natively compiled zstd compressor. This is absolutely NOT recommended unless the zstd compression breaks.
